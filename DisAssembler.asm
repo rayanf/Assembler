@@ -13,7 +13,7 @@
 section .data
     IFD		dq	0 		;Input File Descriptor
 	OFD		dq	0 		;Output File Descriptor
-    ; testinst  db "mov rax,rbx",0
+    ; testinst  db "mov rax,rbx",0,0
     bufferSize equ 10000
     reg64 dq "rax",0,"rdx",0,"rcx",0,"rbx", 0,"rsp",0,"rbp",0,"rsi",0,"rdi", 0,"r8", 0,"r9", 0,"r10", 0,"r11", 0,"r12", 0,"r13", 0,"r14", 0,"r15", 0
     reg32 dq "eax",0,"edx",0,"ecx",0,"ebx",0,"esp",0,"ebp",0,"esi",0,"edi",0,"r8d",0,"r9d",0,"r10d",0,"r11d",0,"r12d",0,"r13d",0,"r14d",0,"r15d",0
@@ -22,6 +22,19 @@ section .data
     space db " ",0
     commo db ",",0
     x     db "0x",0
+
+
+    unaryOpcode dq  "inc",0,0b111111000,0,"dec",0,0b111111001,0,"call",0,0b111111010,0,"jmp",0,0b111111100,0,"push",0,0b111111110,0,"not",0,0b111101010,0,"neg",0,0b111101011,0,"imul",0,0b111101101,0,"idiv",0,0b111101111,0,"pop",0,0b100011000,0,"shl",0,0b110100100,0,"shr",0,0b110100101,0
+
+
+
+
+
+
+
+
+
+
 
 section .bss
     buffer resb bufferSize
@@ -61,8 +74,9 @@ section .bss
 	Displace resb 10	;Hex		|
 	Data	resb 20	;Hex		|
 	;-----------------------------------|
-
 	opsize	resq 1	;Operand size
+    oprSize resq 1
+    adrSize resq 1
 	dispsize resq 1	;Displacement size
 
 	needRex	resb	1	;Boolean. Does it need Rex
@@ -231,15 +245,93 @@ checkUsualUnary:
 
         mov byte[codeD],1
         
+        call getRopCode           ;rax
+        mov qword[Opcode],rax       ;Opcode name
 
-        call newLine
-        mov rax,qword[Reg]
-        call writeNum        
+        lea rsi,[line+rdi+1]
+        mov rdx, 1
+        call HexNumtoIntBounded    ;rax <-
+        and rax, 0b1
+        mov byte[codeW], al          ;W
 
+        add rdi ,2
+        call SetSize
+        
+        lea  
 
+        ; call newLine
+        ; mov rax, qword[unaryOpcode+16]    ;32x
+        ; call writeNum
+        ; mov rsi,Opcode
+        ; call printString
 
     pop rdi
     ret
+
+
+
+SetSize:
+    cmp byte[pre67],1
+    jne addres64
+    mov qword[adrSize],32
+    addres64:
+    mov qword[adrSize],64
+    
+    cmp byte[pre66],0
+    je oprsizeNot16
+    mov qword[oprSize],16
+    jmp finishSizing
+    oprsizeNot16:
+    cmp byte[RexW],0
+    je oprsizeNot64
+    mov qword[oprSize],64
+    jmp finishSizing
+    oprsizeNot64:
+    cmp byte[codeW],0
+    je oprsizeNot32
+    mov qword[oprSize],32
+    jmp finishSizing
+    oprsizeNot32:
+    mov qword[oprSize],8
+    finishSizing:
+    ret
+
+getRopCode:
+    push rdi
+    push rsi
+    push rbx
+    push rdx
+
+    xor rax,rax
+    xor rbx,rbx
+    xor rdi,rdi
+    xor rsi,rsi
+
+    mov rax,qword[Opcode]
+    shl rax,3
+    add rax,qword[Reg]
+    
+    add rsi,16
+
+    gowhile:
+        mov rbx,qword[unaryOpcode+rsi]
+        cmp rax,rbx
+        je gofounded
+
+        add rsi,32
+        jmp gowhile
+    
+    gofounded:
+        sub rsi, 16
+        mov rax,qword[unaryOpcode+rsi]
+        
+    pop rdx
+    pop rbx
+    pop rsi
+    pop rdi
+    ret
+
+
 
 
 
@@ -333,6 +425,8 @@ setDefult:
     mov qword[Data], 0
     mov qword[opsize], 0
     mov qword[dispsize], 0
+    mov byte[codeD], 0
+    mov byte[codeW], 0
 
     ret
 
