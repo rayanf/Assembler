@@ -15,7 +15,7 @@ section .data
 	OFD		dq	0 		;Output File Descriptor
     ; testinst  db "mov rax,rbx",0,0
     bufferSize equ 10000
-    reg64 dq "rax",0,"rdx",0,"rcx",0,"rbx", 0,"rsp",0,"rbp",0,"rsi",0,"rdi", 0,"r8", 0,"r9", 0,"r10", 0,"r11", 0,"r12", 0,"r13", 0,"r14", 0,"r15", 0
+    reg64 dq "rax",0,"rdx",0,"rcx",0,"rbx",0,"rsp",0,"rbp",0,"rsi",0,"rdi",0,"r8", 0,"r9", 0,"r10", 0,"r11", 0,"r12", 0,"r13", 0,"r14", 0,"r15", 0
     reg32 dq "eax",0,"edx",0,"ecx",0,"ebx",0,"esp",0,"ebp",0,"esi",0,"edi",0,"r8d",0,"r9d",0,"r10d",0,"r11d",0,"r12d",0,"r13d",0,"r14d",0,"r15d",0
     reg16 dq "ax",0,"dx",0,"cx",0,"bx",0,"sp",0,"bp",0,"si",0,"di",0,"r8w",0,"r9w",0,"r10w",0,"r11w",0,"r12w",0,"r13w",0,"r14w",0,"r15w",0
     reg8  dq "al",0,"dl",0,"cl",0,"bl",0,"spl",0,"bpl",0,"sil",0,"dil",0,"r8b",0,"r9b",0,"r10b",0,"r11b",0,"r12b",0,"r13b",0,"r14b",0,"r15b",0
@@ -78,7 +78,8 @@ section .bss
     oprSize resq 1
     adrSize resq 1
 	dispsize resq 1	;Displacement size
-
+    memAdress resb  1
+    needSIB resb    1
 	needRex	resb	1	;Boolean. Does it need Rex
 	pre67	resb	1	;Boolean. Does it need prefix 67
 	pre66	resb	1	;Boolean. Does it need prefix 66
@@ -257,7 +258,86 @@ checkUsualUnary:
         add rdi ,2
         call SetSize
         
-        lea  
+        lea  rsi,[line+rdi]      ;al = next char
+        mov rdx, 1
+        call HexNumtoIntBounded    ;rax <-  
+        shr rax, 2                  ;mode    
+         mov qword[Mod], rax          
+       
+        lea rsi, [line+rdi+1]     ;al = next char
+        mov rdx, 1
+        call HexNumtoIntBounded    ;rax <-
+        and rax, 0b111
+        mov qword[RM], rax          ;rm
+
+        call handlePushPopOprSize
+
+        cmp byte[Mod], 0b11
+        jne notMod3
+        mov byte[needSIB],0
+        mov byte[memAdress],0
+        
+
+        xor r9,r9
+        mov rcx,qword[oprSize]
+        mov bl,Byte[RM]
+        mov r9b , byte[RexB]    
+        shl r9b,3
+        add rbx,r9
+        call getREG
+
+
+        call newLine
+        mov rsi, Opcode
+        call printString
+        mov rsi, space
+        call printString
+        mov rsi, Reg
+        call printString
+        pop rdi
+        ret
+        notMod3:
+        cmp byte[RM], 0b100
+        jne notRM4
+        mov byte[needSIB],1
+        mov byte[memAdress],1
+
+        lea rsi,[line+rdi+2]
+        mov rdx, 2
+        call HexNumtoIntBounded    ;rax <-
+        and rax, 0b111              ;Base
+        mov qword[Base], rax          ;Base
+
+        lea rsi,[line+rdi+2]
+        mov rdx, 2
+        call HexNumtoIntBounded    ;rax <-
+        shr rax, 3
+        and rax, 0b111              ;Index
+        mov qword[Index], rax          ;Index
+
+        lea rsi,[line+rdi+2]
+        mov rdx, 2
+        call HexNumtoIntBounded    ;rax <-
+        shr rax,6
+
+        call SetScale               ;scale
+
+        ;pointe += 4
+        add rdi,4
+
+;rsi  pointer
+;rax return len
+        lea rsi, [line+rdi]      
+        call length
+        mov qword[dispsize], rax
+        lea rsi, [line+rdi]      
+
+
+        call setDisp                ;disp
+
+
+
+        notRM4:
 
         ; call newLine
         ; mov rax, qword[unaryOpcode+16]    ;32x
@@ -269,6 +349,133 @@ checkUsualUnary:
     ret
 
 
+setDisp:
+    push rdi   
+    ;rdi = counter
+    ;r10 = len
+    ;rsi = pointer
+    ;rbx = disp
+    ;rsi = local counter
+    xor rdi,rdi
+    xor rbx,rbx
+    mov r10,rax
+    inc rdi
+    xor r11,r11
+    dispwhile1:
+        cmp rdi,r10
+        jge disdone
+        mov rdx,1
+        call HexNumtoIntBounded    ;rax <-
+        ; call newLine
+        ; call writeNum
+        ; call printString
+        xor r11,r11
+        localwhile1:
+            cmp r11,rdi
+            je ldone1
+            shl rax,4
+            inc r11
+            jmp localwhile1
+        ldone1:
+        ; call newLine
+        ; call writeNum
+        add rbx,rax
+        inc rdi
+        inc rsi
+        jmp dispwhile2
+
+    dispwhile2:
+        cmp rdi,r10
+        jge disdone
+        mov rdx,1
+        call HexNumtoIntBounded    ;rax <-
+        ; mov rax ,rdi
+        ; call newLine
+        ; call writeNum
+        ; call printString
+        dec rdi
+        dec rdi
+        xor r11,r11
+        localwhile2:
+            cmp r11,rdi
+            je ldone2
+            shl rax,4
+            inc r11
+            jmp localwhile2
+        ldone2:       
+        
+        inc rdi
+        inc rdi
+        add rbx,rax
+        inc rdi
+        inc rsi
+        jmp dispwhile1
+    
+    disdone:
+    mov qword[Displace],rbx
+    call newLine
+    mov rax,rbx
+    call writeNum
+    pop rdi
+    ret
+SetScale:
+    cmp rax, 0
+    jne scale1
+    mov byte[Scale],1
+    ret
+    scale1:
+    cmp rax, 1
+    jne scale2
+    mov byte[Scale],2
+    ret
+    scale2:
+    cmp rax, 2
+    jne scale3
+    mov byte[Scale],4
+    ret
+    scale3:
+    mov byte[Scale],8
+    ret
+
+
+
+
+
+getREG:
+;rcx = oprSize
+;rbx = reg code
+
+    cmp rcx, 8
+    jne greg16
+    call getReg8
+    jmp regEnd
+    greg16:
+    cmp rcx, 16
+    jne greg32
+    call getReg16
+    jmp regEnd
+    greg32:
+    cmp rcx, 32
+    jne greg64
+    call getReg32
+    testing 2
+    jmp regEnd
+    greg64:
+    call getReg64
+    regEnd:
+
+    mov qword[Reg], rbx
+    ret
+
+handlePushPopOprSize:
+    cmp qword[Opcode],"push"
+    je ppyes
+    cmp qword[Opcode],"pop"
+    je ppyes
+    ret
+    ppyes:
+        mov qword[oprSize],64
+        ret
 
 SetSize:
     cmp byte[pre67],1
@@ -433,6 +640,8 @@ setDefult:
 
 HexNumtoIntBounded:
 ;rsi <- start of num
+    push rsi
+    push rbx
 ;rdx <- end of num
     xor rbx,rbx
     xor r9,r9
@@ -451,6 +660,8 @@ HexNumtoIntBounded:
         shr rbx,4
         mov rax,rbx
         xor rbx,rbx
+        pop rbx
+        pop rsi
         ret
 checkRex:
     cmp byte[line+rdi],"4"
@@ -754,11 +965,12 @@ getReg32:
 ;rbx <- regcode
     push rdi
     xor rdi,rdi
+
     lea rdi, [rbx*2]
     mov rbx, qword[reg32+rdi*8]
+    
     pop rdi
     ret
-
 getReg16:
 ;rbx <- regcode
     push rdi
