@@ -551,7 +551,7 @@ class DisAssembler:
             self.set_scale(self.get(self.pointer+2,self.pointer+4) >> 6)
 
             self.pointer += 4
-            self.disp = self.getDisp()
+                self.disp = self.getDisp()
 
 
             if base == 0b101:

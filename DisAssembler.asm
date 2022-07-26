@@ -66,12 +66,12 @@ section .bss
 	codeD	resb 2	;Boolean	|
 	codeW	resb 2	;Boolean	|
 	Mod	    resb 5	;Binary	|
-	Reg	    resb 5	;Binary	|
-	RM		resb 5	;Binary	|
-	Scale	resb 5	;Binary	|
-	Index   resb 5	;Binary	|
-	Base	resb 5	;Binary	|	
-	Displace resb 10	;Hex		|
+	Reg	    resQ 5	;Binary	|
+	RM		resQ 5	;Binary	|
+	Scale	resQ 5	;Binary	|
+	Index   resQ 5	;Binary	|
+	Base	resQ 5	;Binary	|	
+	Displace resq 10	;Hex		|
 	Data	resb 20	;Hex		|
 	;-----------------------------------|
 	opsize	resq 1	;Operand size
@@ -285,6 +285,8 @@ checkUsualUnary:
         shl r9b,3
         add rbx,r9
         call getREG
+        mov qword[Reg], rbx
+
 
 
         call newLine
@@ -306,14 +308,18 @@ checkUsualUnary:
         mov rdx, 2
         call HexNumtoIntBounded    ;rax <-
         and rax, 0b111              ;Base
-        mov qword[Base], rax          ;Base
+        mov byte[Base], al          ;Base
+        ; xor rax,rax
+        ; mov al,byte[Base]
+        ; call newLine
+        ; call writeNum
 
         lea rsi,[line+rdi+2]
         mov rdx, 2
         call HexNumtoIntBounded    ;rax <-
         shr rax, 3
         and rax, 0b111              ;Index
-        mov qword[Index], rax          ;Index
+        mov byte[Index], al          ;Index
 
         lea rsi,[line+rdi+2]
         mov rdx, 2
@@ -325,28 +331,80 @@ checkUsualUnary:
         ;pointe += 4
         add rdi,4
 
-;rsi  pointer
-;rax return len
+        ;rsi  pointer
+        ;rax return len
         lea rsi, [line+rdi]      
         call length
         mov qword[dispsize], rax
         lea rsi, [line+rdi]      
 
 
+
         call setDisp                ;disp
+        mov qword[Displace],rax
 
+        cmp byte[Base], 0b101
+        jne Basee
+        mov byte[Base],0 
+        jmp indexx
+        Basee:
+        mov rcx,qword[adrSize]
+        xor rbx,rbx
+        xor rax,rax
+        mov bl, byte[Base]        
+        mov al , byte[RexB]
+        shl al,3
+        add rbx,rax
+        
+        call getREG
+        mov qword[Base], rbx        ;Base name
 
+        indexx:
+        mov rcx,qword[adrSize]
+        xor rbx,rbx
+        xor rax,rax
+        mov bl, byte[Index]        
+        mov al , byte[RexX]
+        shl al,3
+        add rbx,rax
+        
+        call getREG
+        mov qword[Index], rbx        ;index name
 
+        call PrintMem
+        pop rdi
+        ret
         notRM4:
+        
+        mov byte[needSIB],0
+        mov byte[memAdress],1
 
-        ; call newLine
-        ; mov rax, qword[unaryOpcode+16]    ;32x
-        ; call writeNum
-        ; mov rsi,Opcode
-        ; call printString
+        mov rcx,qword[adrSize]
+        xor rbx,rbx
+        xor rax,rax
+        mov bl, byte[RM]        
+        mov al , byte[RexB]
+        shl al,3
+        add rbx,rax
+        
+        call getREG
+        mov qword[RM], rbx    
 
-    pop rdi
-    ret
+
+        lea rsi, [line+rdi]      
+        call length
+        mov qword[dispsize], rax
+        lea rsi, [line+rdi]      
+        call setDisp                ;disp
+        mov qword[Displace],rax
+
+        call PrintMem
+        pop rdi
+        ret
+
+PrintMem:
+    
+
 
 
 setDisp:
@@ -403,7 +461,7 @@ setDisp:
             inc r11
             jmp localwhile2
         ldone2:       
-        
+
         inc rdi
         inc rdi
         add rbx,rax
@@ -413,9 +471,9 @@ setDisp:
     
     disdone:
     mov qword[Displace],rbx
-    call newLine
     mov rax,rbx
-    call writeNum
+    ; call newLine
+    ; call writeNum
     pop rdi
     ret
 SetScale:
@@ -463,8 +521,6 @@ getREG:
     greg64:
     call getReg64
     regEnd:
-
-    mov qword[Reg], rbx
     ret
 
 handlePushPopOprSize:
