@@ -179,3 +179,44 @@ GetStrlen:
 
 
 
+writeNumhex:
+   push   rax
+   push   rbx
+   push   rcx
+   push   rdx
+
+   sub    rdx, rdx
+   mov    rbx, 16
+   sub    rcx, rcx
+   cmp    rax, 0
+   jge    wAgainhex
+   push   rax 
+   mov    al, '-'
+   call   putc
+   pop    rax
+   neg    rax  
+
+wAgainhex:
+   cmp    rax, 15
+   jle    cEndhex
+   div    rbx
+   push   rdx
+   inc    rcx
+   sub    rdx, rdx
+   jmp    wAgainhex
+
+cEndhex:
+   add    al, 0x30
+   call   putc
+   dec    rcx
+   jl     wEndhex
+   pop    rax
+   jmp    cEndhex
+wEndhex:
+   pop    rdx
+   pop    rcx
+   pop    rbx
+   pop    rax
+   ret
+
+;---------------------------------------------------------

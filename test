@@ -1,0 +1,3 @@
+mov rax,rbx
+inc rbx
+xor rax,rax
