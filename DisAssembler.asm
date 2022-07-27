@@ -215,13 +215,27 @@ dassembler:
     je finished
     
     call checkUsualBinary
-    
+    cmp byte[isfinished],1
+    je finished
+
+    call checkImdRegBinary
+    cmp byte[isfinished],1
+    je finished
 
     finished:
     ; mov [output],rax
     ret
 
 
+checkImdRegBinary:
+    push rdi
+
+
+
+    pop rdi
+    ret
+
+    
 
 checkUsualBinary:
     push rdi
@@ -388,6 +402,7 @@ checkUsualBinary:
         call length
         mov qword[dispsize] , rax
         lea rsi,[line+rdi]
+
         call setDisp
     
         mov qword[Displace], rax    ;disp
@@ -419,6 +434,7 @@ checkUsualBinary:
         jmp PrintRegMem
 
         IndexeBin:
+        mov byte[hasindex],1
         mov rcx, qword[adrSize]
         xor rbx,rbx
         xor rax,rax
@@ -429,9 +445,201 @@ checkUsualBinary:
         call getREG
         mov qword[Index], rbx        ;index name
         PrintRegMem:
-        testing 1
+        call newLine
+        cmp byte[codeD],0
+        jne printRegSIBfirst
 
+        mov rsi,Opcode
+        call printString
+        mov rsi, space
+        call printString
+
+            cmp byte[hasbase],0
+            je noBaseprintbin2
+            mov rsi,Base
+            call printString
+            mov rsi, sum
+            call printString
+            noBaseprintbin2:
+            cmp byte[hasindex],0
+            je noIndexprintbin2
+            mov rsi, Index
+            call printString
+            mov rsi, mull
+            call printString
+            mov rax, qword[Scale]
+            call writeNum
+            noIndexprintbin2:
+            cmp byte[hasbase],1
+            je printsumbin2
+            cmp byte[hasindex],1
+            je printsumbin2
+            jmp notprintsumbin2
+            printsumbin2:
+            mov rsi, sum
+            call printString
+            notprintsumbin2:
+            mov rsi, x
+            call printString
+            mov rsi, hexDisp
+            call printString
+            mov rsi, braright
+            call printString
+    
+        mov rsi,commo
+        call printString
+        mov rsi,reg1
+        call printString
+        pop rdi
+        mov byte[isfinished],1
+        ret
+        printRegSIBfirst:
+
+        mov rsi,Opcode
+        call printString
+        mov rsi, space
+        call printString
+        mov rsi,reg1
+        call printString
+        mov rsi,commo
+        call printString
+        call memorySizeMap
+        mov rsi, space
+        call printString
+        mov rsi, ptr
+        call printString
+        mov rsi, braleft
+        call printString
+
+
+            cmp byte[hasbase],0
+            je noBaseprintbin
+            mov rsi,Base
+            call printString
+            mov rsi, sum
+            call printString
+            noBaseprintbin:
+            cmp byte[hasindex],0
+            je noIndexprintbin
+            mov rsi, Index
+            call printString
+            mov rsi, mull
+            call printString
+            mov rax, qword[Scale]
+            call writeNum
+            noIndexprintbin:
+            cmp byte[hasbase],1
+            je printsumbin
+            cmp byte[hasindex],1
+            je printsumbin
+            jmp notprintsumbin
+            printsumbin:
+            mov rsi, sum
+            call printString
+            notprintsumbin:
+            mov rsi, x
+            call printString
+            mov rsi, hexDisp
+            call printString
+            mov rsi, braright
+            call printString
+
+        mov byte[isfinished],1
+        pop rdi
+        ret
         notRM4bin:
+        mov byte[needSIB],0
+        mov byte[memAdress],1
+
+        mov byte[hasbase],1
+        xor rbx,rbx
+        mov bl,byte[RexB]
+        shl bl,3
+        xor rax,rax
+        mov al,byte[RM]
+        add rax,rbx
+        mov rcx, qword[adrSize]
+        mov rbx,rax
+        call getREG         ;reg  rbx
+        mov qword[Base], rbx
+
+        add rdi,2
+        
+        lea rsi,[line+rdi]
+        call length
+        mov qword[dispsize] , rax
+        lea rsi,[line+rdi]
+
+        call setDisp
+
+        call newLine
+        mov rsi,Opcode
+        call printString
+        mov rsi, space
+        call printString
+
+        cmp byte[codeD],0
+        jne printRegfirst
+
+        call memorySizeMap
+        mov rsi, space
+        call printString
+        mov rsi, ptr
+        call printString
+        mov rsi, braleft
+        call printString
+        mov rsi, Base
+        call printString
+
+        cmp qword[Displace],0
+        je disp0binn
+        mov rsi, sum
+        call printString
+        mov rsi,x
+        call printString
+        mov rsi, hexDisp
+        call printString
+        disp0binn:
+        mov rsi, braright
+        call printString
+
+        mov rsi, commo
+        call printString
+        mov rsi, reg1
+        call printString
+
+        mov byte[isfinished],1
+        pop rdi
+        ret
+        printRegfirst:
+        mov rsi,reg1
+        call printString
+        mov rsi, commo
+        call printString
+
+        call memorySizeMap
+        mov rsi, space
+        call printString
+        mov rsi, ptr
+        call printString
+        mov rsi, braleft
+        call printString
+        mov rsi, Base
+        call printString
+
+        cmp qword[Displace],0
+        je disp0bin
+        mov rsi, sum
+        call printString
+        mov rsi,x
+        call printString
+        mov rsi, hexDisp
+        call printString
+        disp0bin:
+        mov rsi, braright
+        call printString
+
+        mov byte[isfinished],1
         pop rdi
         ret
 
@@ -828,6 +1036,7 @@ setDisp:
     inc rdi
     xor r11,r11
     inc r10
+    
     dispwhile1:
         cmp rdi,r10
         jge disdone
