@@ -186,7 +186,7 @@ writeNumhex:
    push   rdx
 
    sub    rdx, rdx
-   mov    rbx, 16
+   mov    rbx, 2
    sub    rcx, rcx
    cmp    rax, 0
    jge    wAgainhex
@@ -197,7 +197,7 @@ writeNumhex:
    neg    rax  
 
 wAgainhex:
-   cmp    rax, 15
+   cmp    rax, 1
    jle    cEndhex
    div    rbx
    push   rdx

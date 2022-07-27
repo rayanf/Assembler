@@ -702,7 +702,7 @@ class DisAssembler:
                     else:
                         break
 
-                if op['name'] == 'test' and op['name'] == 'xchg':
+                if op['name'] == 'test' or op['name'] == 'xchg':
                     self.ins.d = 1                  
                 break
             
