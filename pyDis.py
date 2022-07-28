@@ -150,14 +150,6 @@ operators = [
 
         ]
 
-# dictt = {'f':{1:{},
-#               2:{}
-              
-#               },
-
-#         }
-
-
 
 
 memory_size = {8:'BYTE',16:'WORD',32:'DWORD',64:'QWORD'}

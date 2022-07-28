@@ -38,11 +38,10 @@ section .data
     mull db "*",0
     
     hah db "t ",0
-
+    one db "1",0
     unaryOpcode dq  "inc",0,0b111111000,0,"dec",0,0b111111001,0,"call",0,0b111111010,0,"jmp",0,0b111111100,0,"push",0,0b111111110,0,"not",0,0b111101010,0,"neg",0,0b111101011,0,"imul",0,0b111101101,0,"idiv",0,0b111101111,0,"pop",0,0b100011000,0,"shl",0,0b110100100,0,"shr",0,0b110100101,0
     binaryOpcode dq "mov",0, 0b100010,0,"add",0, 0b000000,0,"adc",0, 0b000100,0,"sub",0, 0b001010,0,"sbb",0, 0b000110,0,"or",0, 0b000010,0,"xor",0, 0b001100,0,"and",0, 0b001000,0,"cmp",0, 0b001110,0,"shl",0, 0b000000,0,"shr",0, 0b000000,0,"test",0, 0b0000100001,0,"xchg",0, 0b0000100001,0
-
-
+    ibinOpcode dq   "mov", 0,0b110001000,0,"add", 0,0b100000000,0,"adc", 0,0b100000010,0,"sub", 0,0b100000101,0,"sbb", 0,0b100000011,0,"or",  0,0b100000001,0,"xor", 0,0b100000110,0,"and", 0,0b100000100,0,"cmp", 0,0b100000111,0,"shl", 0,0b110000100,0,"shr", 0,0b110000101,0,"test",0,0b111101000,0
 
 
 section .bss
@@ -198,8 +197,8 @@ dassembler:
     call setDefult
 
     call checkNoneOperand
-    cmp rax,0
-    jne finished
+    cmp byte[isfinished], 1
+    je finished
     
     xor rdi,rdi
 
@@ -209,15 +208,15 @@ dassembler:
     call checkRex
 
     call handlePopPushRet
-
-    call  checkUsualUnary
+    call checkUsualUnary
     cmp byte[isfinished],1
     je finished
     
     call checkUsualBinary
+    ; testing 5
     cmp byte[isfinished],1
     je finished
-
+    
     call checkImdRegBinary
     cmp byte[isfinished],1
     je finished
@@ -229,32 +228,325 @@ dassembler:
 
 checkImdRegBinary:
     push rdi
+    
+    ; testing 4
+    lea rsi,[line+rdi]     
+    mov rdx, 2
+    call HexNumtoIntBounded    ;rax
+    shr rax,2
+    mov qword[Opcode], rax          ;Opcode
+
+    lea rsi,[line+rdi+2]    ;al = next char
+    mov rdx, 2
+    call HexNumtoIntBounded    ;rax
+    shr rax,3
+    and rax,0b111
+    mov qword[Reg], rax          ;rCode
+
+
+    mov byte[codeD],1
+    ; lea rsi,[line+rdi]    ;al = next char
+    ; call printString
+    call getRopCode           ;rax
+    ; testing 1
+    mov qword[Opcode],rax       ;Opcode name
+
+    lea rsi,[line+rdi+1]    ;al = next char
+    mov rdx, 1
+    call HexNumtoIntBounded    ;rax
+    and rax, 0b1
+    mov byte[codeW],al          ;W
+    mov byte[codeD],1
+    
+    add rdi,2
+    call SetSize
+
+    ;mod
+    lea rsi,[line+rdi]
+    mov rdx, 1
+    call HexNumtoIntBounded    ;rax
+    shr rax,2
+    mov qword[Mod], rax          ;Mod
+    
+    ;rm
+    lea rsi,[line+rdi+1]
+    mov rdx, 1
+    call HexNumtoIntBounded    ;rax
+    and rax,0b111
+    mov qword[RM], rax          ;RM
+
+    cmp byte[Mod],3
+    jne notMode3Imd
+    
+    mov rcx, qword[oprSize]
+    mov rbx,rax
+    call getREG         ;reg  rbx
+    mov qword[reg1], rbx
+    call setImd
+
+    call newLine
+    mov rsi,Opcode
+    call printString
+    mov rsi,space
+    call printString
+    mov rsi,reg1
+    call printString
+    mov rsi,commo
+    call printString
+    mov rsi,x
+    call printString
+    mov rsi,hexDisp
+    call printString
+    pop rdi
+    mov byte[isfinished],1
+    ret
+
+    notMode3Imd:
+        cmp byte[RM],0b100
+        jne notRM4imd
+        
+        mov byte[memAdress],1
+        mov byte[needSIB],1
+
+        lea rsi,[line+rdi+2]
+        mov rdx, 2
+        call HexNumtoIntBounded    ;rax
+        and rax,0b111
+        mov qword[Base],rax             ;base
+
+        lea rsi,[line+rdi+2]
+        mov rdx, 2
+        call HexNumtoIntBounded    ;rax
+        shr rax,3
+        and rax,0b111
+        mov qword[Index],rax             ;index
+
+        lea rsi,[line+rdi+2]
+        mov rdx, 2
+        call HexNumtoIntBounded    ;rax
+        shr rax,6
+        call SetScale                ;scale 
+
+        add rdi,4
+
+        call setImd
+    
+        mov qword[Displace], rax    ;disp
+
+        cmp qword[Base],0b101
+        jne Baseeimd
+        cmp qword[dispsize],2
+        je Baseeimd
+        
+        mov byte[hasbase],0
+        jmp noBaseimd
+    Baseeimd:
+        mov byte[hasbase],1
+        xor rbx,rbx
+        mov bl,byte[RexB]
+        shl bl,3
+        mov rax,qword[Base]
+        add rax,rbx
+        mov rcx, qword[adrSize]
+        mov rbx,rax
+        call getREG         ;reg  rbx
+        mov qword[Base], rbx
+    noBaseimd:
+        cmp qword[Index],0b100
+        jne Indexeimd
+        mov byte[hasindex],0
+        mov byte[Index],0
+        jmp PrintRegImd        
+    Indexeimd:
+        mov byte[hasindex],1
+        mov rcx, qword[adrSize]
+        xor rbx,rbx
+        xor rax,rax
+        mov bl, byte[Index]        
+        mov al , byte[RexX]
+        shl al,3
+        add rbx,rax
+        call getREG
+        mov qword[Index], rbx  
+
+    PrintRegImd:
+        call newLine
+        mov rsi,Opcode
+        call printString
+        mov rsi,space
+        call printString
+        call memorySizeMap
+        mov rsi, space
+        call printString
+        mov rsi,ptr
+        call printString
+        mov rsi,braleft
+        call printString
+
+
+            cmp byte[hasbase],0
+            je noBaseprintbin2imd
+            mov rsi,Base
+            call printString
+            mov rsi, sum
+            call printString
+            noBaseprintbin2imd:
+            cmp byte[hasindex],0
+            je noIndexprintbin2imd
+            mov rsi, Index
+            call printString
+            mov rsi, mull
+            call printString
+            mov rax, qword[Scale]
+            call writeNum
+            noIndexprintbin2imd:
+            cmp byte[hasbase],1
+            je printsumbin2imd
+            cmp byte[hasindex],1
+            je printsumbin2imd
+            jmp notprintsumbin2imd
+            printsumbin2imd:
+            mov rsi, sum
+            call printString
+            notprintsumbin2imd:
+            mov rsi, x
+            call printString
+            mov rsi, hexDisp
+            call printString
+            mov rsi, braright
+            call printString
+
+        mov rsi,commo
+        call printString
+        mov rsi,x
+        call printString
+        mov rsi,hexDisp
+        call printString
+
+
+
+        pop rdi
+        mov byte[isfinished],1
+        ret
+    notRM4imd:
+
+        mov byte[hasbase],1
+        xor rbx,rbx
+        mov bl,byte[RexB]
+        shl bl,3
+        xor rax,rax
+        mov al,byte[RM]
+        add rax,rbx
+        mov rcx, qword[adrSize]
+        mov rbx,rax
+        call getREG         ;reg  rbx
+        mov qword[Base], rbx
+
+        add rdi,2
+        
+
+        call setImd
+
+        call newLine
+        mov rsi,Opcode
+        call printString
+        mov rsi, space
+        call printString
+
+                call memorySizeMap
+        mov rsi, space
+        call printString
+        mov rsi, ptr
+        call printString
+        mov rsi, braleft
+        call printString
+        mov rsi, Base
+        call printString
+
+        cmp qword[Displace],0
+        je disp0imdd
+        mov rsi, sum
+        call printString
+        mov rsi,x
+        call printString
+        mov rsi, hexDisp
+        call printString
+
+        disp0imdd:
+        mov rsi, braright
+        call printString
+
+        mov rsi, commo
+        call printString
+        mov rsi, reg1
+        call printString
 
 
 
     pop rdi
     ret
 
+setImd:
+    push rdi
+
+    add rdi,2
+
+
+    lea rsi,[line+rdi]
+    call length
+    mov qword[dispsize] , rax
+    lea rsi,[line+rdi]
+    call setDisp
+
+    pop rdi
+    ret
     
+
+; inc r9d
+; inc Qword ptr [r9+rbx*8]
+; dec qword ptr[0x12]
+; inc qword ptr[rbx*4]
+; inc qword ptr[rsi+rbx*4]
+; neg dword ptr[r8d+0x12]
+; inc qword ptr[rbx*4+0x2]
+; inc dword ptr[rax*4]
+; inc qword ptr[rax*4]
+; inc qword ptr[rsp+rbp*2]
+; inc qword ptr[rbp+rax*2]
+; inc qword ptr[rax*2]
+; inc qword ptr[rax+rbp*2+0x0000000000]
+; inc qword ptr[rax+0x0]
+; inc qword ptr[rax+0x12]
+; inc qword ptr[rax+0x123]
+; inc qword ptr[rax+0xab]
+; cmp rbx,qword ptr[rax+rbx*4+0x12]
+; mov qword ptr[rax+rbx*4+0x12],rcx
+; add rax, qword ptr[r9d+0x12]
+; add qword ptr[r9d+0x12],rax
+; mov rax,0x12
+; mov dword ptr[r8+r9*1+0x12],0x15
+; mov dword ptr[r8+0x12],0x15
+
+
+
 
 checkUsualBinary:
     push rdi
     mov al,byte[line+rdi]      ;al = next char
     mov bl,byte[line+rdi+1]    ;bl = Dnext char
 
-    jl BByes
+        ; testing 7
     cmp al,'8'
+    jl BByes
     je BB
     pop rdi
     ret
     BB: 
-        ; testing 7
         cmp bl,'3'
         jg BByes
         pop rdi
         ret
     BByes:
-        ; testing 1
         lea rsi,[line+rdi]     
         mov rdx, 2
         call HexNumtoIntBounded    ;rax
@@ -273,15 +565,17 @@ checkUsualBinary:
         ; testing 7
         call getOperand2
         mov qword[Opcode], rax
+        ; testing 1
 
         ; call newLine
         ; mov rsi,Opcode
         ; call printString
 
-        lea rsi,[line+rdi+2]
+        lea rsi,[line+rdi+1]
         mov rdx, 1
         call HexNumtoIntBounded    ;rax
         and rax,0b1
+        ; testing 5
         mov byte[codeW], al         ;w
 
         add rdi,2
@@ -305,6 +599,7 @@ checkUsualBinary:
         call getREG         ;reg  rbx
         mov qword[reg1], rbx
 
+        ; testing 5
         ; mov rsi,reg1
         ; call printString
         
@@ -453,6 +748,15 @@ checkUsualBinary:
         call printString
         mov rsi, space
         call printString
+
+            call memorySizeMap
+                    mov rsi, space
+        call printString
+        mov rsi,ptr
+        call printString
+        mov rsi,braleft
+        call printString
+
 
             cmp byte[hasbase],0
             je noBaseprintbin2
@@ -703,7 +1007,7 @@ checkUsualUnary:
         mov rdx, 1
         call HexNumtoIntBounded    ;rax <-  
         shr rax, 2                  ;mode    
-         mov qword[Mod], rax          
+        mov qword[Mod], rax          
        
         lea rsi, [line+rdi+1]     ;al = next char
         mov rdx, 1
@@ -720,12 +1024,17 @@ checkUsualUnary:
         
 
         xor r9,r9
+        xor rbx,rbx
         mov rcx,qword[oprSize]
         mov bl,Byte[RM]
         mov r9b , byte[RexB]    
         shl r9b,3
         add rbx,r9
+        mov rax,rbx
+        ; call newLine 
+        ; call writeNum
         call getREG
+        ; testing 5
         mov qword[Reg], rbx
 
 
@@ -736,6 +1045,11 @@ checkUsualUnary:
         call printString
         mov rsi, Reg
         call printString
+        cmp qword[Opcode],"shr"
+        je handleshrshl
+        cmp qword[Opcode],"shl"
+        je handleshrshl
+
 
         pop rdi
         mov byte[isfinished],1
@@ -840,6 +1154,12 @@ checkUsualUnary:
         mov qword[Index], rbx        ;index name
         printtt:
         call PrintMem
+        cmp qword[Opcode],"shr"
+        je handleshrshl
+        cmp qword[Opcode],"shl"
+        je handleshrshl
+
+
         pop rdi
         mov byte[isfinished],1
         ret
@@ -872,12 +1192,25 @@ checkUsualUnary:
         call setDisp                ;disp
         mov qword[Displace],rax
         call PrintMem
+        cmp qword[Opcode],"shr"
+        je handleshrshl
+        cmp qword[Opcode],"shl"
+        je handleshrshl
+
+
         pop rdi
         mov byte[isfinished],1
         ret
 
 
-
+handleshrshl:
+    mov rsi,commo
+    call printString
+    mov rsi,one
+    call printString
+    pop rdi
+    mov byte[isfinished],1
+    ret
 InttoHex:
 ;rax = int
     push rsi
@@ -1167,6 +1500,8 @@ SetSize:
     ; call newLine
     ; mov al, byte[pre67]
     ; call writeNum
+
+
     cmp byte[pre67],1
     jne addres64
     mov qword[adrSize],32
@@ -1186,11 +1521,15 @@ SetSize:
     oprsizeNot64:
     cmp byte[codeW],0
     je oprsizeNot32
+    ; testing 5
     mov qword[oprSize],32
     jmp finishSizing
     oprsizeNot32:
     mov qword[oprSize],8
     finishSizing:
+    ; call newLine
+    ; mov rax,qword[oprSize]
+    ; call writeNum
     ret
 
 getRopCode:
@@ -1207,9 +1546,11 @@ getRopCode:
     mov rax,qword[Opcode]
     shl rax,3
     add rax,qword[Reg]
+    ; call newLine
+    ; call writeNumhex
     
     add rsi,16
-
+    
     gowhile:
         mov rbx,qword[unaryOpcode+rsi]
         cmp rax,rbx
@@ -1458,8 +1799,7 @@ checkPrefix:
 checkNoneOperand:     
     mov rsi, line
     call HexNumtoInt
-    mov [code],rbx
-
+    mov qword[code],rbx
     cmp	rbx,0b11000011
     mov rax, "ret"
     je	done
@@ -1479,8 +1819,13 @@ checkNoneOperand:
     mov rax, "syscall"
     je	done
     mov rax, 0
-    jmp	done
+    ret
     done:
+        mov byte[isfinished],1
+        call newLine
+        mov qword[Opcode],rax
+        mov rsi, Opcode
+        call printString
         ret
 
 HexNumtoInt:
