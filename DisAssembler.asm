@@ -1,6 +1,6 @@
 %include "in_out.asm"
 %include "sys-equal.asm"
-%include "fileOperation.asm"
+; %include "fileOperation.asm"
 
     %macro testing 1
         push rax
@@ -15,10 +15,48 @@
     %endmacro
 
 
+    %macro copyMem 1
+        push r11
+        push r12
+        push r13
+        push rsi
+        push rdi
+        push rcx
+        push rax
+
+        mov rsi, %1
+        call length
+
+        mov r11, r14
+        mov r12, %1
+        mov r13, rax
+        cld
+        mov rsi, r12
+        mov rdi, r11
+        mov rcx, r13
+        shr rcx,3
+        rep movsq
+        mov rcx, r13
+        and rcx, 7
+        rep movsb
+        add r14, rax
+        
+        pop rax
+        pop rcx
+        pop rdi
+        pop rsi
+        pop r13
+        pop r12
+        pop r11        
+    %endmacro
+
+
 section .data
     IFD		dq	0 		;Input File Descriptor
 	OFD		dq	0 		;Output File Descriptor
     ; testinst  db "mov rax,rbx",0,0
+    enterSave	db	"Enter the name of list file: ", 0
+
     bufferSize equ 10000
     reg64 dq "rax",0,"rcx",0,"rdx",0,"rbx",0,"rsp",0,"rbp",0,"rsi",0,"rdi",0,"r8", 0,"r9", 0,"r10", 0,"r11", 0,"r12", 0,"r13", 0,"r14", 0,"r15", 0
     reg32 dq "eax",0,"ecx",0,"edx",0,"ebx",0,"esp",0,"ebp",0,"esi",0,"edi",0,"r8d",0,"r9d",0,"r10d",0,"r11d",0,"r12d",0,"r13d",0,"r14d",0,"r15d",0
@@ -42,7 +80,7 @@ section .data
     unaryOpcode dq  "inc",0,0b111111000,0,"dec",0,0b111111001,0,"call",0,0b111111010,0,"jmp",0,0b111111100,0,"push",0,0b111111110,0,"not",0,0b111101010,0,"neg",0,0b111101011,0,"imul",0,0b111101101,0,"idiv",0,0b111101111,0,"pop",0,0b100011000,0,"shl",0,0b110100100,0,"shr",0,0b110100101,0
     binaryOpcode dq "mov",0, 0b100010,0,"add",0, 0b000000,0,"adc",0, 0b000100,0,"sub",0, 0b001010,0,"sbb",0, 0b000110,0,"or",0, 0b000010,0,"xor",0, 0b001100,0,"and",0, 0b001000,0,"cmp",0, 0b001110,0,"shl",0, 0b000000,0,"shr",0, 0b000000,0,"test",0, 0b0000100001,0,"xchg",0, 0b0000100001,0
     ibinOpcode dq   "mov", 0,0b110001000,0,"add", 0,0b100000000,0,"adc", 0,0b100000010,0,"sub", 0,0b100000101,0,"sbb", 0,0b100000011,0,"or",  0,0b100000001,0,"xor", 0,0b100000110,0,"and", 0,0b100000100,0,"cmp", 0,0b100000111,0,"shl", 0,0b110000100,0,"shr", 0,0b110000101,0,"test",0,0b111101000,0
-
+    newline db 0xA,0
 
 section .bss
     buffer resb bufferSize
@@ -59,7 +97,7 @@ section .bss
     fileName resb 100
     fileSave resb 100
 
-    output resb 100
+    output resb 10000
     input resb 100
     
 ;------------------------
@@ -86,7 +124,7 @@ section .bss
     hasscale resb 1
     hasdisplace resb 1
     hexDisp resb 20
-
+    ScaleStr resb 2
 	;-----------------------------------|
 	opsize	resq 1	;Operand size
     isfinished resb 0
@@ -154,7 +192,8 @@ File:
     mov	rsi,	buffer
 	mov	[linePointer],	rsi
 
-
+    xor r14,r14
+    mov r14,output
     LOOP:
     ; call setDefault
     call getLine
@@ -168,9 +207,9 @@ File:
 	jl	NLPASS
 	call	dassembler
  
-    mov	rsi, output
+    ; mov	rsi, output
 	call	newLine
-	call	printString
+	; call	printString
 	call	newLine
 
 
@@ -222,7 +261,7 @@ dassembler:
     je finished
 
     finished:
-    ; mov [output],rax
+
     ret
 
 
@@ -297,7 +336,16 @@ checkImdRegBinary:
     call printString
     mov rsi,hexDisp
     call printString
+    copyMem Opcode
+    copyMem space
+    copyMem reg1
+    copyMem commo
+    copyMem x
+    copyMem hexDisp
+    copyMem newline
     pop rdi
+    
+
     mov byte[isfinished],1
     ret
 
@@ -373,32 +421,42 @@ checkImdRegBinary:
         call newLine
         mov rsi,Opcode
         call printString
+        copyMem Opcode
         mov rsi,space
         call printString
+        copyMem space
         call memorySizeMap
         mov rsi, space
         call printString
+        copyMem space
         mov rsi,ptr
         call printString
+        copyMem ptr
         mov rsi,braleft
         call printString
+        copyMem braleft
 
 
             cmp byte[hasbase],0
             je noBaseprintbin2imd
             mov rsi,Base
             call printString
+            copyMem Base
             mov rsi, sum
             call printString
+            copyMem sum
             noBaseprintbin2imd:
             cmp byte[hasindex],0
             je noIndexprintbin2imd
             mov rsi, Index
             call printString
+            copyMem Index
             mov rsi, mull
             call printString
+            copyMem mull
             mov rax, qword[Scale]
             call writeNum
+            copyMem ScaleStr
             noIndexprintbin2imd:
             cmp byte[hasbase],1
             je printsumbin2imd
@@ -408,22 +466,29 @@ checkImdRegBinary:
             printsumbin2imd:
             mov rsi, sum
             call printString
+            copyMem sum
             notprintsumbin2imd:
             mov rsi, x
             call printString
+            copyMem x
             mov rsi, hexDisp
             call printString
+            copyMem hexDisp
             mov rsi, braright
             call printString
+            copyMem braright
 
         mov rsi,commo
         call printString
+        copyMem commo
         mov rsi,x
         call printString
+        copyMem x
         mov rsi,hexDisp
         call printString
+        copyMem hexDisp
 
-
+        copyMem newline
 
         pop rdi
         mov byte[isfinished],1
@@ -452,8 +517,10 @@ checkImdRegBinary:
         call printString
         mov rsi, space
         call printString
+        copyMem Opcode
+        copyMem space
 
-                call memorySizeMap
+        call memorySizeMap
         mov rsi, space
         call printString
         mov rsi, ptr
@@ -463,25 +530,36 @@ checkImdRegBinary:
         mov rsi, Base
         call printString
 
+        copyMem space
+        copyMem ptr
+        copyMem braleft
+        copyMem Base
+
+
+
         cmp qword[Displace],0
         je disp0imdd
         mov rsi, sum
         call printString
+        copyMem sum
         mov rsi,x
         call printString
+        copyMem x
         mov rsi, hexDisp
         call printString
+        copyMem hexDisp
 
         disp0imdd:
         mov rsi, braright
         call printString
-
+        copyMem braright
         mov rsi, commo
         call printString
+        copyMem commo
         mov rsi, reg1
         call printString
-
-
+        copyMem reg1
+        copyMem newline
 
     pop rdi
     ret
@@ -646,6 +724,12 @@ checkUsualBinary:
         mov rsi,reg2
         call printString
         pop rdi
+        copyMem Opcode
+        copyMem space
+        copyMem reg1
+        copyMem commo
+        copyMem reg2
+        copyMem newline
         mov byte[isfinished],1
         ret
 
@@ -662,7 +746,15 @@ checkUsualBinary:
         call printString
         mov rsi,reg1
         call printString
+
         pop rdi
+        copyMem Opcode
+        copyMem space
+        copyMem reg2
+        copyMem commo
+        copyMem reg1
+        copyMem newline
+
         mov byte[isfinished],1
         ret
         notMod3bin:
@@ -748,31 +840,40 @@ checkUsualBinary:
         call printString
         mov rsi, space
         call printString
-
-            call memorySizeMap
-                    mov rsi, space
+        copyMem Opcode
+        copyMem space
+        call memorySizeMap
+        mov rsi, space
         call printString
         mov rsi,ptr
         call printString
         mov rsi,braleft
         call printString
+        copyMem space
+        copyMem ptr
+        copyMem braleft
 
 
             cmp byte[hasbase],0
             je noBaseprintbin2
             mov rsi,Base
             call printString
+            copyMem Base
             mov rsi, sum
             call printString
+            copyMem sum
             noBaseprintbin2:
             cmp byte[hasindex],0
             je noIndexprintbin2
             mov rsi, Index
             call printString
+            copyMem Index
             mov rsi, mull
             call printString
+            copyMem mull
             mov rax, qword[Scale]
             call writeNum
+            copyMem ScaleStr
             noIndexprintbin2:
             cmp byte[hasbase],1
             je printsumbin2
@@ -782,18 +883,24 @@ checkUsualBinary:
             printsumbin2:
             mov rsi, sum
             call printString
+            copyMem sum
             notprintsumbin2:
             mov rsi, x
             call printString
+            copyMem x
             mov rsi, hexDisp
             call printString
+            copyMem hexDisp
             mov rsi, braright
             call printString
-    
+            copyMem braright
         mov rsi,commo
         call printString
+        copyMem commo
         mov rsi,reg1
         call printString
+        copyMem reg1
+        copyMem newline
         pop rdi
         mov byte[isfinished],1
         ret
@@ -801,36 +908,48 @@ checkUsualBinary:
 
         mov rsi,Opcode
         call printString
+        copyMem Opcode
         mov rsi, space
         call printString
+        copyMem space
+
         mov rsi,reg1
         call printString
+        copyMem reg1
         mov rsi,commo
         call printString
+        copyMem commo
         call memorySizeMap
         mov rsi, space
         call printString
+        copyMem space
         mov rsi, ptr
         call printString
+        copyMem ptr
         mov rsi, braleft
         call printString
-
+        copyMem braleft
 
             cmp byte[hasbase],0
             je noBaseprintbin
             mov rsi,Base
             call printString
+            copyMem Base
             mov rsi, sum
             call printString
+            copyMem sum
             noBaseprintbin:
             cmp byte[hasindex],0
             je noIndexprintbin
             mov rsi, Index
             call printString
+            copyMem Index
             mov rsi, mull
             call printString
+            copyMem mull
             mov rax, qword[Scale]
             call writeNum
+            copyMem ScaleStr
             noIndexprintbin:
             cmp byte[hasbase],1
             je printsumbin
@@ -840,14 +959,18 @@ checkUsualBinary:
             printsumbin:
             mov rsi, sum
             call printString
+            copyMem sum
             notprintsumbin:
             mov rsi, x
             call printString
+            copyMem x
             mov rsi, hexDisp
             call printString
+            copyMem hexDisp
             mov rsi, braright
             call printString
-
+            copyMem braright
+            copyMem newline
         mov byte[isfinished],1
         pop rdi
         ret
@@ -881,6 +1004,8 @@ checkUsualBinary:
         call printString
         mov rsi, space
         call printString
+        copyMem Opcode
+        copyMem space
 
         cmp byte[codeD],0
         jne printRegfirst
@@ -894,7 +1019,10 @@ checkUsualBinary:
         call printString
         mov rsi, Base
         call printString
-
+        copyMem space
+        copyMem ptr
+        copyMem braleft
+        copyMem Base
         cmp qword[Displace],0
         je disp0binn
         mov rsi, sum
@@ -903,6 +1031,9 @@ checkUsualBinary:
         call printString
         mov rsi, hexDisp
         call printString
+        copyMem sum
+        copyMem x
+        copyMem hexDisp
         disp0binn:
         mov rsi, braright
         call printString
@@ -911,16 +1042,20 @@ checkUsualBinary:
         call printString
         mov rsi, reg1
         call printString
-
+        copyMem braright
+        copyMem commo
+        copyMem reg1
+        copyMem newline
         mov byte[isfinished],1
         pop rdi
         ret
         printRegfirst:
         mov rsi,reg1
         call printString
+        copyMem reg1
         mov rsi, commo
         call printString
-
+        copyMem commo
         call memorySizeMap
         mov rsi, space
         call printString
@@ -930,19 +1065,27 @@ checkUsualBinary:
         call printString
         mov rsi, Base
         call printString
+        copyMem space
+        copyMem ptr
+        copyMem braleft
+        copyMem Base
 
         cmp qword[Displace],0
         je disp0bin
         mov rsi, sum
         call printString
+        copyMem sum
         mov rsi,x
         call printString
+        copyMem x
         mov rsi, hexDisp
         call printString
+        copyMem hexDisp
         disp0bin:
         mov rsi, braright
         call printString
-
+        copyMem braright
+        copyMem newline
         mov byte[isfinished],1
         pop rdi
         ret
@@ -1045,12 +1188,15 @@ checkUsualUnary:
         call printString
         mov rsi, Reg
         call printString
+        copyMem Opcode
+        copyMem space
+        copyMem Reg
         cmp qword[Opcode],"shr"
         je handleshrshl
         cmp qword[Opcode],"shl"
         je handleshrshl
 
-
+        copyMem newline
         pop rdi
         mov byte[isfinished],1
         ret        
@@ -1206,8 +1352,11 @@ checkUsualUnary:
 handleshrshl:
     mov rsi,commo
     call printString
+    copyMem commo
     mov rsi,one
     call printString
+    copyMem one
+    copyMem newline
     pop rdi
     mov byte[isfinished],1
     ret
@@ -1269,17 +1418,20 @@ PrintMem:
     call newLine
     mov rsi, Opcode
     call printString
+    copyMem Opcode
     mov rsi, space
     call printString
-
+    copyMem space
     call memorySizeMap
     mov rsi, space
     call printString
+    copyMem space
     mov rsi, ptr
     call printString
+    copyMem ptr
     mov rsi, braleft
     call printString
-
+    copyMem braleft
 
     cmp byte[needSIB],0
     je noSIBprint
@@ -1287,17 +1439,22 @@ PrintMem:
     je noBaseprint
     mov rsi,Base
     call printString
+    copyMem Base
     mov rsi, sum
     call printString
+    copyMem sum
     noBaseprint:
     cmp byte[hasindex],0
     je noIndexprint
     mov rsi, Index
     call printString
+    copyMem Index
     mov rsi, mull
     call printString
+    copyMem mull
     mov rax, qword[Scale]
     call writeNum
+    copyMem ScaleStr
     noIndexprint:
     cmp byte[hasbase],1
     je printsum
@@ -1307,6 +1464,7 @@ PrintMem:
     printsum:
     mov rsi, sum
     call printString
+    copyMem sum
     notprintsum:
     mov rsi, x
     call printString
@@ -1314,10 +1472,15 @@ PrintMem:
     call printString
     mov rsi, braright
     call printString
+    copyMem x
+    copyMem hexDisp
+    copyMem braright
+    copyMem newline
     ret
     noSIBprint:
     mov rsi, Base
     call printString
+    copyMem Base
 
     cmp qword[Displace],0
     je disp0
@@ -1327,10 +1490,14 @@ PrintMem:
     call printString
     mov rsi, hexDisp
     call printString
+    copyMem sum
+    copyMem x
+    copyMem hexDisp
     disp0:
     mov rsi, braright
     call printString
-
+    copyMem braright
+    copyMem newline
     ret
 
 memorySizeMap:
@@ -1339,22 +1506,26 @@ memorySizeMap:
     jne worddd
     mov rsi, bytee
     call printString
+    copyMem bytee
     ret
     worddd:
     cmp qword[oprSize],16
     jne dworddd
     mov rsi, wordd
     call printString
+    copyMem wordd
     ret
     dworddd:
     cmp qword[oprSize],32
     jne qworddd
     mov rsi, dwordd
     call printString
+    copyMem dwordd
     ret
     qworddd:
     mov rsi, qwordd
     call printString
+    copyMem qwordd
     ret
 setDisp:
     push rdi   
@@ -1443,19 +1614,26 @@ SetScale:
     cmp rax, 0
     jne scale1
     mov byte[Scale],1
+    mov byte[ScaleStr], '1'
     ret
     scale1:
     cmp rax, 1
     jne scale2
     mov byte[Scale],2
+    mov byte[ScaleStr], '2'
+
     ret
     scale2:
     cmp rax, 2
     jne scale3
     mov byte[Scale],4
+    mov byte[ScaleStr], '4'
+
     ret
     scale3:
     mov byte[Scale],8
+    mov byte[ScaleStr], '8'
+
     ret
 
 
@@ -1614,14 +1792,19 @@ handlePopPushRet:
         call newLine
         mov rsi, Opcode
         call printString
+        copyMem Opcode
         mov rsi, space
         call printString
+        copyMem space
         mov rsi, x
         call printString
+        copyMem x
         mov rax, qword[Displace]
         call writeNumhex
-
-
+        mov rax, qword[Displace]
+        call InttoHex
+        copyMem hexDisp
+        copyMem newline
         xor rax,rax
         mov byte[isfinished],1
         pop rdi
@@ -1642,7 +1825,10 @@ handlePopPushRet:
         mov rsi, reg1
         call printString
     ; call writeNum
-
+        copyMem Opcode
+        copyMem space
+        copyMem reg1
+        copyMem newline
         xor rax,rax
         mov byte[isfinished],1
         pop rdi
@@ -1826,6 +2012,9 @@ checkNoneOperand:
         mov qword[Opcode],rax
         mov rsi, Opcode
         call printString
+        copyMem Opcode
+        copyMem newline
+
         ret
 
 HexNumtoInt:
@@ -2045,6 +2234,45 @@ getReg8:
     ret
 
 Exit:
+    mov rsi,output
+    call newLine
+    call newLine
+    call printString
+
+    ; mov byte[r14],0
+	mov	rsi,	enterSave
+	call	printString
+	mov	rax,	3
+	mov	rbx,	2
+	mov	rcx,	fileSave
+	mov	rdx,	50
+	int	80h
+
+	;Replace the 0xA at the end of the name by NULL
+	mov	rax,	-1
+	wiwhile:
+	inc	rax
+	mov	bl,	[fileSave+rax]
+	cmp	bl,	0xA
+	jne	wiwhile
+	mov	bl,	0
+	mov	[fileSave+rax],	bl
+
+
+    mov	rdi,	fileSave
+    call	createFile
+
+    mov	[OFD], rax
+    mov	rdi,	[OFD]
+    mov	rsi,	output
+    call	length
+    mov	rdx,	rax
+    call	writeFile
+
+    mov	rdi,	[OFD]
+    call	closeFile
+
+
 	mov	rax,	1
 	mov	rbx,	0
 	int	0x80
@@ -2093,3 +2321,40 @@ getOperand2:
     pop rsi
     pop rdi
     ret    
+
+
+
+
+
+openFile:
+;rdi <- fileName
+	mov	rax,	sys_open
+	mov	rsi,	O_RDWR
+	syscall
+    ret
+createFile:
+;rdi <- fileName
+	mov	rax,	sys_create
+	mov	rsi,	sys_IRUSR | sys_IWUSR
+	syscall
+    ret
+writeFile:
+;rdi <- fileDescriptor
+;rsi <- buffer
+;rdx <- length
+	mov	rax,	sys_write
+	syscall
+    ret
+readFile:
+;rdi <- fileDescriptor
+;rsi <- buffer
+;rdx <- length
+	mov	rax,	sys_read
+	syscall
+    mov	byte[rsi+rax],	0
+    ret
+closeFile:
+;rdi <- fileDescriptor
+    mov	rax,	sys_close
+    syscall
+    ret

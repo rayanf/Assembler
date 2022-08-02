@@ -1,3 +1,15 @@
 mov rax,rbx
-inc rbx
 xor rax,rax
+inc ebx
+inc cl
+inc dx
+inc QWORD PTR[rdx+rdx*8+0x12]
+inc QWORD PTR[r9+rdx*8]
+inc QWORD PTR[rcx+0x12]
+inc QWORD PTR[rdx*8+0x12]
+inc QWORD PTR[0x12]
+inc QWORD PTR[rbx]
+inc QWORD PTR[rdx*8]
+inc rax
+call rsi
+call r14
